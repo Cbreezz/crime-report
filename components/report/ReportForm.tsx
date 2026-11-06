@@ -1,9 +1,13 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { LocationInput } from "./LocationInput";
-import crypto from "crypto";
+import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
+
+const LocationInput = dynamic(
+  () => import("./LocationInput").then((module) => module.LocationInput),
+  { ssr: false }
+);
 
 const REPORT_TYPES = [
   "Theft",
@@ -40,6 +44,7 @@ export function ReportForm({ onComplete }: ReportFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [anonymous, setAnonymous] = useState(true);
   const [reporterName, setReporterName] = useState("");
+  const [submitError, setSubmitError] = useState("");
 
   const { data: session } = useSession();
 
@@ -50,6 +55,17 @@ export function ReportForm({ onComplete }: ReportFormProps) {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const supportedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!supportedTypes.includes(file.type)) {
+      setSubmitError("Only JPEG, PNG, and WebP images are supported.");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setSubmitError("Image must be 5 MB or smaller.");
+      e.target.value = "";
+      return;
+    }
 
     setIsAnalyzing(true);
 
@@ -84,24 +100,13 @@ export function ReportForm({ onComplete }: ReportFormProps) {
     }
   };
 
-  const generateReportId = useCallback(() => {
-    const timestamp = Date.now().toString();
-    const randomBytes = crypto.randomBytes(16).toString("hex");
-    const combinedString = `${timestamp}-${randomBytes}`;
-    return crypto
-      .createHash("sha256")
-      .update(combinedString)
-      .digest("hex")
-      .slice(0, 16);
-  }, []);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setSubmitError("");
 
     try {
       const reportData = {
-        reportId: generateReportId(),
         type: formData.incidentType,
         specificType: formData.specificType,
         title: formData.title,
@@ -110,10 +115,8 @@ export function ReportForm({ onComplete }: ReportFormProps) {
         latitude: coordinates.latitude,
         longitude: coordinates.longitude,
         image: image,
-        status: "PENDING",
         anonymous,
         reporterName: anonymous ? null : reporterName,
-        userId: anonymous || !session?.user?.id ? null : parseInt(session.user.id),
       };
 
       const response = await fetch("/api/reports/create", {
@@ -133,6 +136,9 @@ export function ReportForm({ onComplete }: ReportFormProps) {
       onComplete(result);
     } catch (error) {
       console.error("Error submitting report:", error);
+      setSubmitError(
+        error instanceof Error ? error.message : "Failed to submit report"
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -227,6 +233,8 @@ export function ReportForm({ onComplete }: ReportFormProps) {
                 <img
                   src={image}
                   alt="Preview"
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -390,6 +398,12 @@ export function ReportForm({ onComplete }: ReportFormProps) {
             </div>
           )}
         </>
+      )}
+
+      {submitError && (
+        <div role="alert" className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">
+          {submitError}
+        </div>
       )}
 
       {/* Submit Button */}

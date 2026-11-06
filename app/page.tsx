@@ -1,7 +1,5 @@
 import Link from "next/link";
 
-export const dynamic = 'force-dynamic';
-
 export default function Home() {
   return (
     // <div className="relative min-h-screen bg-black selection:bg-sky-500/20 overflow-hidden">

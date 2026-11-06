@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = 'force-dynamic';
-
 export default function Contact() {
   return (
     <div className="relative min-h-screen bg-black selection:bg-sky-500/20 overflow-hidden">

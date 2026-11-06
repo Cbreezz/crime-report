@@ -1,14 +1,60 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { consumeRateLimit } from "@/lib/rate-limit";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function POST(request: Request) {
   try {
-    const { image } = await request.json();
-    const base64Data = image.split(",")[1];
+    const forwardedFor = request.headers.get("x-forwarded-for");
+    const clientIp = forwardedFor?.split(",")[0]?.trim() || "unknown";
+    if (!consumeRateLimit(`analysis:${clientIp}`, 20, 60 * 60 * 1000)) {
+      return NextResponse.json(
+        { error: "Too many image analyses. Please try again later." },
+        { status: 429 }
+      );
+    }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const { image } = await request.json();
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json(
+        { error: "Gemini is not configured" },
+        { status: 503 }
+      );
+    }
+    if (typeof image !== "string" || !image.startsWith("data:image/")) {
+      return NextResponse.json(
+        { error: "A valid image is required" },
+        { status: 400 }
+      );
+    }
+
+    const [header, ...dataParts] = image.split(",");
+    const mimeType = header.match(/^data:(image\/[^;]+);/)?.[1];
+    const base64Data = dataParts.join(",");
+
+    if (!mimeType || !base64Data) {
+      return NextResponse.json(
+        { error: "A valid image is required" },
+        { status: 400 }
+      );
+    }
+    if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
+      return NextResponse.json(
+        { error: "Only JPEG, PNG, and WebP images are supported" },
+        { status: 400 }
+      );
+    }
+    if (base64Data.length > 7_000_000) {
+      return NextResponse.json(
+        { error: "Image is too large. Maximum size is 5 MB." },
+        { status: 400 }
+      );
+    }
+
+    const model = genAI.getGenerativeModel({
+      model: process.env.GEMINI_MODEL || "gemini-3-flash-preview",
+    });
 
     const prompt = `Analyze this emergency situation image and respond in this exact format without any asterisks or bullet points:
 TITLE: Write a clear, brief title
@@ -20,7 +66,7 @@ DESCRIPTION: Write a clear, concise description`;
       {
         inlineData: {
           data: base64Data,
-          mimeType: "image/jpeg",
+          mimeType,
         },
       },
     ]);

@@ -17,11 +17,15 @@ export default withAuth(
   },
   {
     callbacks: {
-      authorized: ({ token }) => !!token,
+      authorized: ({ token, req }) =>
+        !!token &&
+        (!req.nextUrl.pathname.startsWith("/dashboard") ||
+          token.role === "ADMIN" ||
+          token.role === "MODERATOR"),
     },
   }
 );
 
 export const config = {
-  matcher: ["/dashboard/:path*"],
+  matcher: ["/dashboard/:path*", "/my-reports/:path*"],
 };

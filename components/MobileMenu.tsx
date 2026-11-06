@@ -1,7 +1,6 @@
 "use client";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { useState, useEffect } from "react";
 
 interface MobileMenuProps {
   isOpen: boolean;
@@ -9,12 +8,7 @@ interface MobileMenuProps {
 }
 
 export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
-  const { data: session } = useSession();
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+  const { data: session, status } = useSession();
 
   if (!isOpen) return null;
 
@@ -73,22 +67,15 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
               How It Works
             </Link>
             <Link
-              href="/resources"
-              className="text-sm text-zinc-400 hover:text-white transition-colors"
-              onClick={onClose}
-            >
-              Resources
-            </Link>
-            <Link
               href="/contact"
               className="text-sm text-zinc-400 hover:text-white transition-colors"
               onClick={onClose}
             >
               Contact
             </Link>
-            {isClient && (
+            {status !== "loading" && (
               <>
-                {session ? (
+                {session && session.user.role !== "USER" ? (
                   <>
                     <Link
                       href="/dashboard"
@@ -100,6 +87,25 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                     <button
                       onClick={() => {
                         signOut();
+                        onClose();
+                      }}
+                      className="text-sm text-zinc-400 hover:text-white transition-colors text-left"
+                    >
+                      Sign Out
+                    </button>
+                  </>
+                ) : session ? (
+                  <>
+                    <Link
+                      href="/my-reports"
+                      className="text-sm text-zinc-400 hover:text-white transition-colors"
+                      onClick={onClose}
+                    >
+                      My Reports
+                    </Link>
+                    <button
+                      onClick={() => {
+                        signOut({ callbackUrl: "/" });
                         onClose();
                       }}
                       className="text-sm text-zinc-400 hover:text-white transition-colors text-left"

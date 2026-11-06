@@ -186,6 +186,8 @@ export default function Dashboard() {
                     <img
                       src={report.image}
                       alt="Report"
+                      loading="lazy"
+                      decoding="async"
                       className="mt-4 rounded-lg border border-neutral-800"
                     />
                   )}
@@ -194,7 +196,7 @@ export default function Dashboard() {
                   value={report.status}
                   onChange={(e) =>
                     updateReportStatus(
-                      report.id,
+                      report.reportId,
                       e.target.value as ReportStatus
                     )
                   }

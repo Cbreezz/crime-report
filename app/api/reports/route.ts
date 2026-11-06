@@ -13,10 +13,25 @@ export async function GET(req: Request) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (
+      session.user.role !== "ADMIN" &&
+      session.user.role !== "MODERATOR"
+    ) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status") as ReportStatus | null;
     const type = searchParams.get("type") as ReportType | null;
+    const validStatuses = Object.values(ReportStatus);
+    const validTypes = Object.values(ReportType);
+
+    if (status && !validStatuses.includes(status)) {
+      return NextResponse.json({ error: "Invalid report status" }, { status: 400 });
+    }
+    if (type && !validTypes.includes(type)) {
+      return NextResponse.json({ error: "Invalid report type" }, { status: 400 });
+    }
 
     // Build the where clause based on filters
     const where = {
@@ -24,9 +39,7 @@ export async function GET(req: Request) {
       ...(type && { type }),
     };
 
-    // Add timeout and retry logic
-    const reports = await Promise.race([
-      prisma.report.findMany({
+    const reports = await prisma.report.findMany({
         where,
         orderBy: {
           createdAt: "desc",
@@ -45,11 +58,7 @@ export async function GET(req: Request) {
           createdAt: true,
           updatedAt: true,
         },
-      }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Database timeout")), 15000)
-      ),
-    ]);
+      });
 
     return NextResponse.json(reports);
   } catch (error: any) {
@@ -74,10 +83,5 @@ export async function GET(req: Request) {
       { error: "Failed to fetch reports" },
       { status: 500 }
     );
-  } finally {
-    // Optional: Disconnect for serverless environments
-    if (process.env.VERCEL) {
-      await prisma.$disconnect();
-    }
   }
 }

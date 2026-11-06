@@ -4,8 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-export const dynamic = 'force-dynamic';
-
 export default function SignUp() {
   const router = useRouter();
   const [formData, setFormData] = useState({
@@ -44,7 +42,7 @@ export default function SignUp() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Something went wrong");
+        throw new Error(data.error || data.message || "Something went wrong");
       }
 
       router.push("/auth/signin");

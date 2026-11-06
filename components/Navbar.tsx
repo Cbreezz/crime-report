@@ -1,17 +1,12 @@
 "use client";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import MobileMenu from "./MobileMenu";
 
 export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { data: session } = useSession();
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+  const { data: session, status } = useSession();
 
   return (
     <>
@@ -62,21 +57,40 @@ export default function Navbar() {
               >
                 How It Works
               </Link>
-              <Link
-                href="/resources"
-                className="text-sm text-zinc-400 hover:text-white transition-colors"
-              >
-                Resources
-              </Link>
-              {isClient && (
+              {status !== "loading" && (
                 <>
                   {session ? (
-                    <Link
-                      href="/dashboard"
-                      className="text-sm text-zinc-400 hover:text-white transition-colors"
-                    >
-                      Dashboard
-                    </Link>
+                    session.user.role !== "USER" ? (
+                      <>
+                        <Link
+                          href="/dashboard"
+                          className="text-sm text-zinc-400 hover:text-white transition-colors"
+                        >
+                          Dashboard
+                        </Link>
+                        <button
+                          onClick={() => signOut({ callbackUrl: "/" })}
+                          className="text-sm text-zinc-400 hover:text-white transition-colors"
+                        >
+                          Sign Out
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <Link
+                          href="/my-reports"
+                          className="text-sm text-zinc-400 hover:text-white transition-colors"
+                        >
+                          My Reports
+                        </Link>
+                        <button
+                          onClick={() => signOut({ callbackUrl: "/" })}
+                          className="text-sm text-zinc-400 hover:text-white transition-colors"
+                        >
+                          Sign Out
+                        </button>
+                      </>
+                    )
                   ) : (
                     <>
                       <Link

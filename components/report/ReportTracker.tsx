@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { Search, Loader } from "lucide-react";
 
 interface ReportDetails {
@@ -21,7 +21,13 @@ export function ReportTracker() {
   const [reportDetails, setReportDetails] = useState<ReportDetails | null>(
     null
   );
-  const router = useRouter();
+
+  useEffect(() => {
+    const requestedReportId = new URLSearchParams(window.location.search).get("reportId");
+    if (requestedReportId) {
+      setReportId(requestedReportId);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,14 +42,25 @@ export function ReportTracker() {
     }
 
     try {
-      const response = await fetch(`/api/reports/${reportId}/details`);
+      const response = await fetch(
+        `/api/reports/${encodeURIComponent(reportId.trim())}/details`
+      );
       if (!response.ok) {
-        throw new Error("Report not found");
+        const result = await response.json().catch(() => null);
+        throw new Error(
+          response.status === 404
+            ? "Report not found"
+            : result?.error || "Unable to retrieve report details"
+        );
       }
       const data = await response.json();
       setReportDetails(data);
     } catch (err) {
-      setError("Unable to find report. Please check the ID and try again.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to find report. Please check the ID and try again."
+      );
     } finally {
       setLoading(false);
     }

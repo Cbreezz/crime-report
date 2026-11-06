@@ -4,8 +4,6 @@ import { signIn, getSession } from "next-auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export const dynamic = 'force-dynamic';
-
 export default function SignIn() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -28,13 +26,13 @@ export default function SignIn() {
       if (result?.error) {
         setError("Invalid credentials");
       } else {
-        // Get session to check role
         const session = await getSession();
         if (session?.user?.role === "USER") {
           router.push("/submit-report");
         } else {
           router.push("/dashboard");
         }
+        router.refresh();
       }
     } catch (error) {
       setError("An error occurred during sign in");

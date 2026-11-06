@@ -1,8 +1,6 @@
 "use client";
 import { ReportTracker } from "@/components/report/ReportTracker";
 
-export const dynamic = 'force-dynamic';
-
 export default function TrackReportPage() {
   return (
     <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center">
