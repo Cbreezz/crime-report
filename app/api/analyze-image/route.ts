@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { consumeRateLimit } from "@/lib/rate-limit";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-
 export async function POST(request: Request) {
   try {
     const forwardedFor = request.headers.get("x-forwarded-for");
@@ -14,14 +12,7 @@ export async function POST(request: Request) {
         { status: 429 }
       );
     }
-
     const { image } = await request.json();
-    if (!process.env.GEMINI_API_KEY) {
-      return NextResponse.json(
-        { error: "Gemini is not configured" },
-        { status: 503 }
-      );
-    }
     if (typeof image !== "string" || !image.startsWith("data:image/")) {
       return NextResponse.json(
         { error: "A valid image is required" },
@@ -51,6 +42,14 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json(
+        { error: "Gemini is not configured" },
+        { status: 503 }
+      );
+    }
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
     const model = genAI.getGenerativeModel({
       model: process.env.GEMINI_MODEL || "gemini-3-flash-preview",
