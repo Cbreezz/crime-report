@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
     const model = genAI.getGenerativeModel({
-      model: process.env.GEMINI_MODEL || "gemini-3-flash-preview",
+      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
     });
 
     const prompt = `Analyze this emergency situation image and respond in this exact format without any asterisks or bullet points:
@@ -84,6 +84,25 @@ DESCRIPTION: Write a clear, concise description`;
     });
   } catch (error) {
     console.error("Image analysis error:", error);
+    const message = error instanceof Error ? error.message : "";
+    if (/API key|API_KEY_INVALID|permission|unauthenticated/i.test(message)) {
+      return NextResponse.json(
+        { error: "Image analysis authentication failed" },
+        { status: 502 }
+      );
+    }
+    if (/quota|rate limit|resource exhausted/i.test(message)) {
+      return NextResponse.json(
+        { error: "Image analysis quota exceeded" },
+        { status: 429 }
+      );
+    }
+    if (/model|not found|not supported/i.test(message)) {
+      return NextResponse.json(
+        { error: "Configured image analysis model is unavailable" },
+        { status: 502 }
+      );
+    }
     return NextResponse.json(
       { error: "Failed to analyze image" },
       { status: 500 }
