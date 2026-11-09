@@ -12,7 +12,17 @@ export async function POST(request: Request) {
         { status: 429 }
       );
     }
-    const { image } = await request.json();
+    let payload: { image?: unknown };
+    try {
+      payload = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "A valid JSON request body is required" },
+        { status: 400 }
+      );
+    }
+
+    const { image } = payload;
     if (typeof image !== "string" || !image.startsWith("data:image/")) {
       return NextResponse.json(
         { error: "A valid image is required" },
@@ -58,23 +68,45 @@ TITLE: Write a clear, brief title
 TYPE: Choose one (Theft, Fire Outbreak, Medical Emergency, Natural Disaster, Violence, or Other)
 DESCRIPTION: Write a clear, concise description`;
 
-    const result = await genAI.models.generateContent({
-      model: "gemini-3.8-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType,
+    const generateContent = () =>
+      genAI.models.generateContent({
+        model: "gemini-3.8-flash",
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  data: base64Data,
+                  mimeType,
+                },
               },
-            },
-          ],
-        },
-      ],
-    });
+            ],
+          },
+        ],
+      });
+
+    let result;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        result = await generateContent();
+        break;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const isUnavailable =
+          /503|UNAVAILABLE|high demand/i.test(message);
+
+        if (!isUnavailable || attempt === 2) {
+          throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+      }
+    }
+
+    if (!result) {
+      throw new Error("Gemini did not return an analysis");
+    }
 
     const text = result.text || "";
 
@@ -91,6 +123,12 @@ DESCRIPTION: Write a clear, concise description`;
   } catch (error) {
     console.error("Image analysis error:", error);
     const message = error instanceof Error ? error.message : "";
+    if (/503|UNAVAILABLE|high demand/i.test(message)) {
+      return NextResponse.json(
+        { error: "Image analysis service is temporarily unavailable" },
+        { status: 503 }
+      );
+    }
     if (/API key|API_KEY_INVALID|permission|unauthenticated/i.test(message)) {
       return NextResponse.json(
         { error: "Image analysis authentication failed" },
