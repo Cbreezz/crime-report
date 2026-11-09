@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "761bc0bc-5417-4c53-aa20-56dfa00cef53"
+      }
+    },
+    "android": {
+      "package": "com.cbreezz.myapp"
+    }
+  }
+}

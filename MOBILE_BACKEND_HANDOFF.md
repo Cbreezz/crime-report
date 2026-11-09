@@ -8,7 +8,8 @@ application as its backend; it does not need to access Prisma directly.
 
 - Base URL: `https://crime-report-ashy.vercel.app`
 - Format: JSON over HTTPS
-- Authentication: not yet mobile-safe
+- Authentication: HMAC-SHA256 bearer token from `POST /api/auth/mobile-login`
+  (NextAuth cookie sessions are still accepted for browser clients)
 - Database: PostgreSQL with Prisma
 - Report IDs: 16-character uppercase hexadecimal strings, for example
   `F9C0DA163E07A2C3`
@@ -26,15 +27,23 @@ Do not add a trailing slash.
 | Feature | Endpoint | Current mobile status |
 |---|---|---|
 | Public report tracking | `GET /api/reports/{reportId}/details` | Working and confirmed against real data |
-| User signup | `POST /api/auth/signup` | Backend endpoint exists; mobile session authentication is not implemented |
-| Report creation | `POST /api/reports/create` | Backend needs repair; do not treat successful demo submissions as real |
-| Image analysis | `POST /api/analyze-image` | Integrated but depends on Gemini availability/key configuration |
-| My Reports | `GET /api/reports/mine` | Requires browser/NextAuth session; not mobile-safe yet |
-| List reports | `GET /api/reports` | Admin/moderator only; requires NextAuth session |
-| Update report status | `PATCH /api/reports/{reportId}` | Admin/moderator only; requires NextAuth session |
-| Browser sign in | `POST /api/auth/[...nextauth]` | Web NextAuth route, not a bearer-token mobile API |
+| User signup | `POST /api/auth/signup` | Live; returns public user fields, does not create a session |
+| Mobile sign in | `POST /api/auth/mobile-login` | Live; returns a 30-day bearer token plus user profile |
+| Session revalidation | `GET /api/auth/mobile-session` | Live with bearer token; `401` clears the stored session |
+| Password reset request | `POST /api/auth/password-reset` | Implemented; requires `RESEND_API_KEY` and `PASSWORD_RESET_FROM` |
+| Password reset confirm | `POST /api/auth/password-reset/confirm` | Implemented; single-use token, 30-minute expiry |
+| Report creation | `POST /api/reports/create` | Live (bearer optional; anonymous reports allowed) |
+| Image analysis | `POST /api/analyze-image` | Live; depends on Gemini availability/key configuration |
+| My Reports | `GET /api/reports/mine` | Live with bearer token |
+| List reports | `GET /api/reports` | `ADMIN` / `MODERATOR` only; bearer token accepted |
+| Update report status | `PATCH /api/reports/{reportId}` | `ADMIN` / `MODERATOR` only; bearer token accepted |
+| Browser sign in | `POST /api/auth/[...nextauth]` | Web NextAuth route, not used by the mobile client |
 
 ## Verified Mobile Integration Audit
+
+> Historical note: this audit was performed before mobile bearer authentication
+> and live report creation were connected. The **API Status** table above is the
+> current source of truth.
 
 The following checks were performed from the Expo mobile application:
 
@@ -246,25 +255,61 @@ Body:
 
 Success: HTTP `201` with public user fields. Password is never returned.
 
-Do not infer that signup means the mobile user is signed in. There is no mobile
-bearer-session API yet.
+Signup does not create a mobile session. Call `POST /api/auth/mobile-login`
+after a successful signup to obtain a bearer token.
 
 ## Mobile Authentication Guidance
 
-The existing NextAuth credentials provider is designed around browser cookies:
+Mobile sign-in is a dedicated JSON endpoint, not a NextAuth browser flow:
 
-- Mobile sign in must not scrape a NextAuth web page or depend on cookies.
-- Do not send a password to protected report routes except through a dedicated
-  mobile-safe authentication endpoint.
-- The backend should implement one of these:
+1. `POST /api/auth/mobile-login` with `{ email, password }` verifies the bcrypt
+   hash and returns `{ token, user }`.
+2. The token is an HMAC-SHA256 bearer token valid for 30 days. Store it in
+   `expo-secure-store`; never in AsyncStorage or a URL.
+3. Send it as `Authorization: Bearer <token>` on protected requests.
+4. `GET /api/auth/mobile-session` revalidates it and returns the current profile
+   and role.
+5. A `401` means the token is invalid or expired: clear it and sign in again.
+   A network error is not a `401`; keep the cached profile.
 
-  1. Expo SecureStore plus NextAuth mobile cookie handling.
-  2. Dedicated signup/login endpoints that return short-lived bearer tokens
-     stored in Expo SecureStore.
-  3. OAuth provider flow with secure mobile callbacks.
+Dependencies: `MOBILE_AUTH_SECRET` (falls back to `NEXTAUTH_SECRET`) must be
+configured. Never scrape the NextAuth web pages from the app or reuse browser
+cookies.
 
-Until that exists, keep sign-in, My Reports, account-linked submissions, and
-admin features demo-only in the Expo app. Clearly label them as demo UI.
+## Password Reset
+
+```text
+POST /api/auth/password-reset
+Content-Type: application/json
+
+{ "email": "user@example.com" }
+```
+
+Always returns `200` with a generic message so the endpoint cannot be used to
+enumerate accounts. If the account exists, the backend emails a signed,
+single-use code valid for 30 minutes. The code is bound to the user's current
+password hash, so it stops working after a successful reset.
+
+```text
+POST /api/auth/password-reset/confirm
+Content-Type: application/json
+
+{ "token": "<code from email>", "password": "NewPassword1" }
+```
+
+Success: `{ "success": true }`. New passwords must be 8–72 characters and
+contain at least one letter and one digit.
+
+Email delivery configuration:
+
+- `RESEND_API_KEY` — Resend API key.
+- `PASSWORD_RESET_FROM` — verified sender, e.g. `SafeReport <no-reply@example.com>`.
+- `PASSWORD_RESET_SECRET` — optional; falls back to `NEXTAUTH_SECRET`.
+
+Without email configuration the request endpoint returns `503`. The email
+contains a `safereport://reset-password?token=…` deep link and the raw code.
+Resetting a password does not revoke bearer tokens already issued to other
+devices.
 
 ## My Reports
 
@@ -272,14 +317,15 @@ admin features demo-only in the Expo app. Clearly label them as demo UI.
 GET /api/reports/mine
 ```
 
-This endpoint expects an authenticated NextAuth browser session and returns
-signed-in user reports. It is not currently usable as a plain React Native API
-with no implementation changes.
+This endpoint accepts the mobile bearer token and returns reports linked to the
+signed-in account.
 
 ## Admin APIs
 
-All report listing and status updates require NextAuth session roles of `ADMIN`
-or `MODERATOR`.
+All report listing and status updates require a signed-in user whose database
+role is `ADMIN` or `MODERATOR`. Mobile bearer tokens and NextAuth browser
+sessions are both accepted, and the role is re-read from the database on every
+request.
 
 List reports:
 

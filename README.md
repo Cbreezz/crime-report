@@ -85,6 +85,10 @@ NEXTAUTH_URL="http://localhost:3000/api/auth"
 GEMINI_API_KEY=your-gemini-api-key
 NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your-mapbox-access-api-key
 
+# Mobile password reset (optional until the forgot-password flow is used)
+RESEND_API_KEY=re_your-resend-key
+PASSWORD_RESET_FROM="SafeReport <no-reply@your-domain.com>"
+# PASSWORD_RESET_SECRET falls back to NEXTAUTH_SECRET
 
 ```
 
