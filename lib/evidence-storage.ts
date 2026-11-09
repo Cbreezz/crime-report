@@ -28,7 +28,9 @@ export async function storeEvidence(image: string | null): Promise<string | null
   const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
   if (!cloudName || !apiKey || !apiSecret) {
-    return process.env.NODE_ENV === "production" ? null : image;
+    // No media host configured: keep the validated, size-capped data URL in
+    // Postgres so photo evidence still works.
+    return image;
   }
 
   const timestamp = Math.floor(Date.now() / 1000);
