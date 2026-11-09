@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { ReportType } from "@prisma/client";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getRequestUserId } from "@/lib/mobile-auth";
 import { randomBytes } from "crypto";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { storeEvidence } from "@/lib/evidence-storage";
@@ -128,14 +127,27 @@ export async function POST(request: Request) {
       );
     }
 
-    const session = await getServerSession(authOptions);
-    const numericUserId = session?.user?.id ? parseInt(session.user.id, 10) : null;
+    const numericUserId = await getRequestUserId(request);
     if (!anonymous && !numericUserId) {
       return NextResponse.json(
         { error: "Sign in to submit a report with your identity" },
         { status: 401 }
       );
     }
+
+    let reporterNameValue: string | null = null;
+    if (!anonymous && numericUserId) {
+      reporterNameValue =
+        typeof reporterName === "string" && reporterName.trim()
+          ? reporterName.trim()
+          : (
+              await prisma.user.findUnique({
+                where: { id: numericUserId },
+                select: { name: true },
+              })
+            )?.name ?? null;
+    }
+
     let report;
     let reportId: string;
 
@@ -162,10 +174,7 @@ export async function POST(request: Request) {
             image: storedImage,
             status: "PENDING",
             userId: anonymous ? null : numericUserId,
-            reporterName:
-              !anonymous && typeof reporterName === "string"
-                ? reporterName.trim() || null
-                : null,
+            reporterName: anonymous ? null : reporterNameValue,
           },
         });
         break;
