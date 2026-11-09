@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { consumeRateLimit } from "@/lib/rate-limit";
 
+export const maxDuration = 60;
+
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204 });
 }
@@ -74,7 +76,7 @@ DESCRIPTION: Write a clear, concise description`;
 
     const generateContent = () =>
       genAI.models.generateContent({
-        model: "gemini-3.8-flash",
+        model: "gemini-3.5-flash",
         contents: [
           {
             role: "user",
