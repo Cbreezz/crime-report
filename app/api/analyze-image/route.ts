@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { consumeRateLimit } from "@/lib/rate-limit";
 
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204 });
+}
+
 export async function POST(request: Request) {
   try {
     const forwardedFor = request.headers.get("x-forwarded-for");
@@ -85,6 +89,9 @@ DESCRIPTION: Write a clear, concise description`;
             ],
           },
         ],
+        config: {
+          abortSignal: AbortSignal.timeout(12_000),
+        },
       });
 
     let result;
@@ -123,6 +130,12 @@ DESCRIPTION: Write a clear, concise description`;
   } catch (error) {
     console.error("Image analysis error:", error);
     const message = error instanceof Error ? error.message : "";
+    if (/abort|timeout|timed out/i.test(message)) {
+      return NextResponse.json(
+        { error: "Image analysis timed out" },
+        { status: 504 }
+      );
+    }
     if (/503|UNAVAILABLE|high demand/i.test(message)) {
       return NextResponse.json(
         { error: "Image analysis service is temporarily unavailable" },
