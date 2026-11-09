@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { consumeRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
@@ -49,10 +49,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-    const model = genAI.getGenerativeModel({
-      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+    const genAI = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
     });
 
     const prompt = `Analyze this emergency situation image and respond in this exact format without any asterisks or bullet points:
@@ -60,17 +58,25 @@ TITLE: Write a clear, brief title
 TYPE: Choose one (Theft, Fire Outbreak, Medical Emergency, Natural Disaster, Violence, or Other)
 DESCRIPTION: Write a clear, concise description`;
 
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: base64Data,
-          mimeType,
+    const result = await genAI.models.generateContent({
+      model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                data: base64Data,
+                mimeType,
+              },
+            },
+          ],
         },
-      },
-    ]);
+      ],
+    });
 
-    const text = await result.response.text(); // Ensure text() is awaited
+    const text = result.text || "";
 
     // Parse the response more precisely
     const titleMatch = text.match(/TITLE:\s*(.+)/);
