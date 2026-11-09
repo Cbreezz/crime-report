@@ -1,22 +1,54 @@
 import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { ReportStatus } from "@prisma/client";
+import { getRequestUser } from "@/lib/mobile-auth";
+
+export async function GET(
+  request: Request,
+  { params }: { params: { reportId: string } }
+) {
+  try {
+    const user = await getRequestUser(request);
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (user.role !== "ADMIN" && user.role !== "MODERATOR") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const normalizedId = params.reportId.trim();
+    const report = await prisma.report.findFirst({
+      where: {
+        reportId: {
+          in: [normalizedId, normalizedId.toUpperCase()],
+        },
+      },
+    });
+
+    if (!report) {
+      return NextResponse.json({ error: "Report not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(report);
+  } catch (error) {
+    console.error("Error fetching report:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch report" },
+      { status: 500 }
+    );
+  }
+}
 
 export async function PATCH(
   request: Request,
   { params }: { params: { reportId: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
+    const user = await getRequestUser(request);
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    if (
-      session.user.role !== "ADMIN" &&
-      session.user.role !== "MODERATOR"
-    ) {
+    if (user.role !== "ADMIN" && user.role !== "MODERATOR") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -24,21 +56,27 @@ export async function PATCH(
     if (!Object.values(ReportStatus).includes(status)) {
       return NextResponse.json({ error: "Invalid report status" }, { status: 400 });
     }
-    const report = await prisma.report.updateMany({
+
+    const normalizedId = params.reportId.trim();
+    const report = await prisma.report.findFirst({
       where: {
         reportId: {
-          in: [params.reportId.trim(), params.reportId.trim().toUpperCase()],
+          in: [normalizedId, normalizedId.toUpperCase()],
         },
       },
-      data: { status },
+      select: { reportId: true },
     });
-
-    if (report.count === 0) {
+    if (!report) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
+    await prisma.report.update({
+      where: { reportId: report.reportId },
+      data: { status },
+    });
+
     return NextResponse.json({
-      reportId: params.reportId.trim().toUpperCase(),
+      reportId: report.reportId,
       status,
       updated: true,
     });

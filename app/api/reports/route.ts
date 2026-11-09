@@ -1,22 +1,18 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 
 import { ReportStatus, ReportType } from "@prisma/client";
 import prisma from "@/lib/prisma";
-import { authOptions } from "@/lib/auth";
+import { getRequestUser } from "@/lib/mobile-auth";
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
+    const user = await getRequestUser(req);
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    if (
-      session.user.role !== "ADMIN" &&
-      session.user.role !== "MODERATOR"
-    ) {
+    if (user.role !== "ADMIN" && user.role !== "MODERATOR") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -50,11 +46,14 @@ export async function GET(req: Request) {
           type: true,
           title: true,
           description: true,
+          reportType: true,
           location: true,
           latitude: true,
           longitude: true,
           image: true,
           status: true,
+          userId: true,
+          reporterName: true,
           createdAt: true,
           updatedAt: true,
         },

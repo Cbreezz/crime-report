@@ -1,6 +1,12 @@
 import crypto from "crypto";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
+
+export type RequestUser = {
+  id: number;
+  role: "USER" | "MODERATOR" | "ADMIN";
+};
 
 const TOKEN_VERSION = "v1";
 export const MOBILE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -76,16 +82,34 @@ export function getBearerToken(request: Request): string | null {
   return token.trim() || null;
 }
 
-/**
- * Resolves the signed-in user from a mobile bearer token, falling back to a
- * NextAuth cookie session for browser clients.
- */
-export async function getRequestUserId(request: Request): Promise<number | null> {
-  const token = getBearerToken(request);
-  if (token) return verifyMobileToken(token);
-
+async function getSessionUserId(): Promise<number | null> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return null;
   const parsed = Number.parseInt(session.user.id, 10);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Resolves the signed-in user and their current role from a mobile bearer
+ * token, falling back to a NextAuth cookie session for browser clients.
+ */
+export async function getRequestUser(request: Request): Promise<RequestUser | null> {
+  const token = getBearerToken(request);
+  const tokenUserId = token ? verifyMobileToken(token) : null;
+  // A presented but invalid bearer token must not fall back to cookie auth.
+  if (token && !tokenUserId) return null;
+
+  const userId = tokenUserId ?? (await getSessionUserId());
+  if (!userId) return null;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true },
+  });
+  return user;
+}
+
+export async function getRequestUserId(request: Request): Promise<number | null> {
+  const user = await getRequestUser(request);
+  return user?.id ?? null;
 }
