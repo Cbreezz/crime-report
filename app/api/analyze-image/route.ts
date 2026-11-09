@@ -59,7 +59,7 @@ TYPE: Choose one (Theft, Fire Outbreak, Medical Emergency, Natural Disaster, Vio
 DESCRIPTION: Write a clear, concise description`;
 
     const result = await genAI.models.generateContent({
-      model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
+      model: "gemini-3.8-flash",
       contents: [
         {
           role: "user",
